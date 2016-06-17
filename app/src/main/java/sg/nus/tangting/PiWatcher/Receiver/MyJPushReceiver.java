@@ -68,7 +68,7 @@ public class MyJPushReceiver extends BroadcastReceiver {
 
     private void createNotify(Context context, String message, String extras){
         NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(context)
-                        .setSmallIcon(R.drawable.raspberry_notification)
+                        .setSmallIcon(R.drawable.ic_notifications_raspberry)
                         .setContentTitle("Pi Watcher")
                         .setContentText(message);
         mBuilder.setAutoCancel(true).setDefaults(Notification.DEFAULT_VIBRATE | Notification.DEFAULT_LIGHTS).setShowWhen(false);

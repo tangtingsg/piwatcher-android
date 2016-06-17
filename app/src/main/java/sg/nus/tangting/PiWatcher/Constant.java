@@ -10,4 +10,5 @@ public class Constant {
     public static final String PREFS_KEY_SERVER_INIT = "server_init";
     public static final String PREFS_KEY_UUID = "uuid";
     public static final String PREFS_KEY_PSW = "psw";
+    public static final String PREFS_KEY_NOTIFY = "notify";
 }

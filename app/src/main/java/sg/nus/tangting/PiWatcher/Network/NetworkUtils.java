@@ -4,7 +4,6 @@ package sg.nus.tangting.PiWatcher.Network;
 import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
-import android.text.TextUtils;
 
 import com.orhanobut.logger.Logger;
 
@@ -17,11 +16,8 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
 
 import sg.nus.tangting.PiWatcher.Movement;
-import sg.nus.tangting.PiWatcher.MyApplication;
 import sg.nus.tangting.PiWatcher.Utils;
 
 public class NetworkUtils {
@@ -48,13 +44,27 @@ public class NetworkUtils {
 
         ArrayList<Movement> list;
         try{
-            list = ParseJson(json);
+            list = parseJsonDatas(json);
         }catch (JSONException ex){
             Logger.e(ex, "JSon Error");
             return new ArrayList<>();
         }
 
         return  list;
+    }
+
+    public static boolean clearData(String uuid, String psw){
+
+        String para = String.format("action=clear&uuid=%s&psw=%s",uuid,psw);
+        String realUrl = API_URL + "?" + para;
+        String json = "";
+        try{
+            json = readResponse(realUrl);
+        }catch (Exception ex){
+            Logger.e(ex, "Network Error");
+        }
+
+        return isStatusOk(json);
     }
 
     public static boolean verifyAuthorization(String uuid, String psw){
@@ -106,18 +116,15 @@ public class NetworkUtils {
         try{
             JSONObject jsonObj= new JSONObject(jsonStr);
             String status = jsonObj.getString("status");
-            if(status.equals("ok")){
-                return true;
-            }else{
-                return false;
-            }
+            return status.equals("ok");
         }catch (JSONException ex){
+            Logger.d("JSon Error");
             return false;
         }
     }
 
 
-    private static ArrayList<Movement> ParseJson(String jsonStr) throws JSONException {
+    private static ArrayList<Movement> parseJsonDatas(String jsonStr) throws JSONException {
 
         ArrayList<Movement> list = new ArrayList<Movement>();
         JSONObject jsonObj= new JSONObject(jsonStr);

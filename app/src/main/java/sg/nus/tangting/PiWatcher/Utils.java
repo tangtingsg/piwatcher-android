@@ -1,6 +1,7 @@
 package sg.nus.tangting.PiWatcher;
 
 import android.content.Context;
+import android.os.Handler;
 import android.widget.Toast;
 
 import org.json.JSONException;
@@ -16,17 +17,21 @@ public class Utils {
 
     public static void showToast(final Context context, int stringId) {
         final String msg = context.getString(stringId);
-        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show();
-    }
-
-    public static void showToast(final Context context, final String msg){
-        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show();
-        /*new Handler(context.getMainLooper()).post(new Runnable() {
+        new Handler(context.getMainLooper()).post(new Runnable() {
             @Override
             public void run() {
                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show();
             }
-        });*/
+        });
+    }
+
+    public static void showToast(final Context context, final String msg){
+        new Handler(context.getMainLooper()).post(new Runnable() {
+            @Override
+            public void run() {
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     public static boolean isEmpty(String s) {

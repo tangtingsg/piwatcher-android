@@ -29,8 +29,6 @@ public class LoginActivity extends AppCompatActivity {
 
     private static final int PERMISSIONS_REQUEST_SCANNER = 0x01;
 
-    private static final int MESSAGE_VERIFY = 0x01;
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -51,26 +49,6 @@ public class LoginActivity extends AppCompatActivity {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, PERMISSIONS_REQUEST_SCANNER);
         }
     }
-
-    public Handler handler = new Handler(){
-        @Override
-        public void handleMessage(Message msg) {
-            super.handleMessage(msg);
-            switch (msg.what){
-                case MESSAGE_VERIFY:
-                    Bundle bundle = msg.getData();
-                    String uuid = bundle.getString(Constant.JSON_KEY_UUID);
-                    String psw = bundle.getString(Constant.JSON_KEY_PSW);
-                    if(uuid != null){
-                        saveLoginPreferences(uuid,psw);
-                        finishToMainActivity(uuid,psw);
-                    }else{
-                        Utils.showToast(LoginActivity.this, "Authorization failed!");
-                    }
-                    break;
-            }
-        }
-    };
 
     private void saveLoginPreferences(String uuid, String psw){
         SharedPreferences.Editor editor = getSharedPreferences(Constant.PREFS_FILE, MODE_PRIVATE).edit();
@@ -111,7 +89,6 @@ public class LoginActivity extends AppCompatActivity {
     }
 
     private void processScanResult(String str){
-        Logger.d(str);
         final HashMap<String,String> identity = Utils.getAuthorization(str);
 
         if(identity == null){
@@ -121,15 +98,20 @@ public class LoginActivity extends AppCompatActivity {
                 @Override
                 public void run() {
                     boolean verify = NetworkUtils.verifyAuthorization(identity.get(Constant.JSON_KEY_UUID), identity.get(Constant.JSON_KEY_PSW));
-                    Message message = new Message();
-                    message.what = MESSAGE_VERIFY;
-                    if(verify){
-                        Bundle bundle = new Bundle();
-                        bundle.putString(Constant.JSON_KEY_UUID, identity.get(Constant.JSON_KEY_UUID));
-                        bundle.putString(Constant.JSON_KEY_PSW, identity.get(Constant.JSON_KEY_PSW));
-                        message.setData(bundle);
+
+                    if(!verify){
+                        Utils.showToast(LoginActivity.this, "Authorization failed!");
+                        return;
                     }
-                    handler.sendMessage(message);
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            String uuid = identity.get(Constant.JSON_KEY_UUID);
+                            String psw = identity.get(Constant.JSON_KEY_PSW);
+                            saveLoginPreferences(uuid,psw);
+                            finishToMainActivity(uuid,psw);
+                        }
+                    });
                 }
             }).start();
         }

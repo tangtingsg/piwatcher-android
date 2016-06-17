@@ -63,4 +63,8 @@ public class RecyclerAdapter extends RecyclerView.Adapter<RecyclerAdapter.ViewHo
         }
     }
 
+    public void clear(){
+        mList.clear();
+    }
+
 }

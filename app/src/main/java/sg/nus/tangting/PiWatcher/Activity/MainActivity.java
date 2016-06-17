@@ -5,8 +5,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
-import android.os.Handler;
-import android.os.Message;
 import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -49,30 +47,50 @@ public class MainActivity extends AppCompatActivity{
     private boolean isPrefsJPushInit = false;
     private boolean isPrefsServerInit = false;
 
+    private boolean isPrefsNotify = true;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        Logger.t(0).i("onCreate");
-        setContentView(R.layout.activity_main);
 
-        initIdentity();
         initPreference();
-        initView();
-        initJPushAndServer();
+        initIdentity();
 
-        registerMainReceiver();
+        setContentView(R.layout.activity_main);
+        initView();
+
+        if(isPrefsNotify){
+            initJPushAndServer();
+            registerMainReceiver();
+        }
+    }
+
+    private void finishToLoginActivity(){
+        //fix bug when setJPushAliasIfNeed is called after finish
+        isPrefsNotify = false;
+        Intent intent = new Intent(this, LoginActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        startActivity(intent);
+        this.finish();
     }
 
     private void initIdentity(){
         Intent intent = getIntent();
-        mUUID = intent.getStringExtra(Constant.JSON_KEY_UUID);
-        if(mUUID != null){
-            mPSW = intent.getStringExtra(Constant.JSON_KEY_PSW);
+        SharedPreferences preferences = getSharedPreferences(Constant.PREFS_FILE, MODE_PRIVATE);
+        String uuidIntent = intent.getStringExtra(Constant.JSON_KEY_UUID);
+        String uuidPrefs = mUUID = preferences.getString(Constant.PREFS_KEY_UUID, "");
 
+        if(uuidIntent == null && uuidPrefs.equals("")){
+            Logger.d("Already logout");
+            finishToLoginActivity();
+            return;
+        }
+
+        if(uuidIntent != null){
+            mUUID = uuidIntent;
+            mPSW = intent.getStringExtra(Constant.JSON_KEY_PSW);
         }else{
-            SharedPreferences preferences = getSharedPreferences(Constant.PREFS_FILE, MODE_PRIVATE);
-            mUUID = preferences.getString(Constant.PREFS_KEY_UUID, "");
+            mUUID = uuidPrefs;
             mPSW = preferences.getString(Constant.PREFS_KEY_PSW, "");
         }
         mJPushAlias = mUUID.replace("-","");
@@ -82,6 +100,7 @@ public class MainActivity extends AppCompatActivity{
         SharedPreferences settings = getSharedPreferences(Constant.PREFS_FILE, MODE_PRIVATE);
         isPrefsJPushInit = settings.getBoolean(Constant.PREFS_KEY_JPUSH_INIT, false);
         isPrefsServerInit = settings.getBoolean(Constant.PREFS_KEY_SERVER_INIT, false);
+        isPrefsNotify = settings.getBoolean(Constant.PREFS_KEY_NOTIFY, true);
     }
 
     private void initView(){
@@ -109,9 +128,10 @@ public class MainActivity extends AppCompatActivity{
         getSharedPreferences(Constant.PREFS_FILE, MODE_PRIVATE).edit().clear().apply();
 
         JPushInterface.stopPush(this);
-
-        unregisterReceiver(mMainReceiver);
-        mMainReceiver = null;
+        if(mMainReceiver != null){
+            unregisterReceiver(mMainReceiver);
+            mMainReceiver = null;
+        }
 
         Intent intent = new Intent(this, LoginActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
@@ -119,25 +139,9 @@ public class MainActivity extends AppCompatActivity{
         this.finish();
     }
 
-    private static final int UPDATE_COMPLETE = 0x01;
-    private static final String UPDATE_KEY_MOVEMENT = "Movement";
-    public Handler handler = new Handler(){
-        @Override
-        public void handleMessage(Message msg) {
-            super.handleMessage(msg);
-            switch (msg.what){
-                case UPDATE_COMPLETE:
-                    ArrayList<Movement> result = msg.getData().getParcelableArrayList(UPDATE_KEY_MOVEMENT);
-                    mAdapter.addItems(result);
-                    mAdapter.notifyDataSetChanged();
-                    mSwipeRefreshLayout.setRefreshing(false);
-                    break;
-            }
-        }
-    };
-
     private void updateFromUiThread(){
         if(NetworkUtils.isOnline(this)){
+            // Fix the bug when first start now showing refreshing
             mSwipeRefreshLayout.post(new Runnable() {
                 @Override
                 public void run() {
@@ -155,13 +159,43 @@ public class MainActivity extends AppCompatActivity{
         @Override
         public void run() {
             long latestUpdateTime = mAdapter.getLatestUpdateTime();
-            List<Movement> result = NetworkUtils.queryData(mUUID, mPSW, latestUpdateTime, 20);
-            Message msg = new Message();
-            msg.what = UPDATE_COMPLETE;
-            Bundle bundle = new Bundle();
-            bundle.putParcelableArrayList(UPDATE_KEY_MOVEMENT , (ArrayList<Movement>)result);
-            msg.setData(bundle);
-            handler.sendMessage(msg);
+            final List<Movement> result = NetworkUtils.queryData(mUUID, mPSW, latestUpdateTime, 20);
+
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    mAdapter.addItems(result);
+                    mAdapter.notifyDataSetChanged();
+                    mSwipeRefreshLayout.setRefreshing(false);
+                }
+            });
+        }
+    };
+
+    private void clearFromUiThread(){
+        mSwipeRefreshLayout.setRefreshing(true);
+        mAdapter.clear();
+        mAdapter.notifyDataSetChanged();
+        if(NetworkUtils.isOnline(this)){
+            new Thread(clearMovementRunnable).start();
+        }else{
+            Utils.showToast(this, R.string.network_not_connected);
+        }
+    }
+
+    private Runnable clearMovementRunnable = new Runnable() {
+        @Override
+        public void run() {
+            boolean result = NetworkUtils.clearData(mUUID, mPSW);
+            if(!result){
+                Utils.showToast(MainActivity.this, R.string.clear_data_failed);
+            }
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    mSwipeRefreshLayout.setRefreshing(false);
+                }
+            });
         }
     };
 
@@ -180,6 +214,7 @@ public class MainActivity extends AppCompatActivity{
         if( (!isSettingJPushAlias) && (!isPrefsJPushInit) ){
             isSettingJPushAlias = true;
             JPushInterface.setAlias(this,mJPushAlias, mJPushAliasCallback);
+            Logger.t(3).d("JPush Init Alias");
         }
     }
 
@@ -228,9 +263,44 @@ public class MainActivity extends AppCompatActivity{
         }
     };
 
+    private void changeNotificationState(){
+        if(isPrefsNotify){
+            getSharedPreferences(Constant.PREFS_FILE, MODE_PRIVATE).edit()
+                    .putBoolean(Constant.PREFS_KEY_NOTIFY, false).apply();
+
+            JPushInterface.stopPush(this);
+            if(mMainReceiver != null){
+                unregisterReceiver(mMainReceiver);
+                mMainReceiver = null;
+            }
+            isPrefsNotify = false;
+        }else{
+            getSharedPreferences(Constant.PREFS_FILE, MODE_PRIVATE).edit()
+                    .putBoolean(Constant.PREFS_KEY_NOTIFY, true).apply();
+
+            initJPushAndServer();
+            registerMainReceiver();
+            isPrefsNotify = true;
+        }
+    }
+
+    private void changeNotificationIcon(MenuItem menuItem){
+        if (isPrefsNotify){
+            menuItem.setIcon(R.drawable.ic_notifications_active);
+            menuItem.setTitle(R.string.menu_notification_off);
+        }else{
+            menuItem.setIcon(R.drawable.ic_notifications_off);
+            menuItem.setTitle(R.string.menu_notification_on);
+        }
+    }
+
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.main_menu, menu);
+
+        MenuItem item = menu.findItem(R.id.menu_notification);
+        changeNotificationIcon(item);
+
         return super.onCreateOptionsMenu(menu);
     }
 
@@ -239,6 +309,13 @@ public class MainActivity extends AppCompatActivity{
         switch (item.getItemId()){
             case R.id.menu_logout:
                 logout();
+                break;
+            case R.id.menu_clear:
+                clearFromUiThread();
+                break;
+            case R.id.menu_notification:
+                changeNotificationState();
+                changeNotificationIcon(item);
                 break;
         }
         return true;
@@ -260,7 +337,11 @@ public class MainActivity extends AppCompatActivity{
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if(mMainReceiver !=null) unregisterReceiver(mMainReceiver);
+        if(mMainReceiver !=null){
+            unregisterReceiver(mMainReceiver);
+            mMainReceiver = null;
+        }
+
     }
 
     private MainReceiver mMainReceiver;
@@ -281,7 +362,7 @@ public class MainActivity extends AppCompatActivity{
 
             switch (intent.getAction()){
                 case android.net.ConnectivityManager.CONNECTIVITY_ACTION:
-                    if(NetworkUtils.isOnline(MainActivity.this)){
+                    if(NetworkUtils.isOnline(MainActivity.this) && isPrefsNotify){
                         setJPushAliasIfNeed();
                         setServerAliasIfNeed();
                     }
