@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name" translatable="false">Pi Watcher</string>
+    <string name="push_init_fail">Push Service Init Fail</string>
+    <string name="network_not_connected">Network not connected</string>
+    <string name="menu_logout">Logout</string>
+    <string name="login_with_qr_code">Login with QR Code</string>
+</resources>
