@@ -75,7 +75,7 @@ public class MainActivity extends AppCompatActivity{
             mUUID = preferences.getString(Constant.PREFS_KEY_UUID, "");
             mPSW = preferences.getString(Constant.PREFS_KEY_PSW, "");
         }
-        mJPushAlias = mPSW.replace("-","");
+        mJPushAlias = mUUID.replace("-","");
     }
 
     private void initPreference(){
